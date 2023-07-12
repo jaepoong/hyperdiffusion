@@ -91,7 +91,7 @@ def rand_poses(size, device, radius=1, theta_range=[np.pi/3, 2*np.pi/3], phi_ran
     return poses
 
 def line_poses(size, device, radius=1, phi_range=[0, 2*np.pi]):
-    ''' generate random poses from an orbit camera
+    ''' generate random poses from an orbit camera with line view of upper hemi-sphere
     Args:
         size: batch size of generated poses.
         device: where to allocate the output.
@@ -197,6 +197,7 @@ class NeRFDataset:
         frames = transform["frames"]
         #frames = sorted(frames, key=lambda d: d['file_path']) # why do I sort...
         print(self.mode)
+        print('hi')
         # for colmap, manually interpolate a test set.
         if self.mode == 'colmap' and type == 'test':
             
@@ -218,26 +219,29 @@ class NeRFDataset:
 
         else:
             # for colmap, manually split a valid set (the first frame).
+            # changed slitly for omni3d dataset
             if self.mode == 'colmap':
                 if type == 'train':
-                    frames = frames[1:]
+                    frames = frames[:int(np.ceil(len(frames)*0.6))]
                 elif type == 'val':
-                    frames = frames[:1]
+                    frames = frames[int(np.ceil(len(frames)*0.6)):]
                 # else 'all' or 'trainval' : use all frames
-            
             # blender이며 test의 경우.
             self.poses = []
             self.images = []
             for f in tqdm.tqdm(frames, desc=f'Loading {type} data'):
-                f_path = os.path.join(self.root_path, f['file_path'])
-                if self.mode == 'blender' and '.' not in os.path.basename(f_path):
+                if self.mode == 'colmap':
+                    f_path = os.path.join(self.root_path,'images', f['file_path']+'.png')
+                
+                elif self.mode == 'blender' and '.' not in os.path.basename(f_path):
                     f_path += '.png' # so silly...
-
-                # there are non-exist paths in fox...
+                # there are non-exist paths in fox... 
+                
                 if not os.path.exists(f_path):
                     continue
                 
                 pose = np.array(f['transform_matrix'], dtype=np.float32) # [4, 4]
+
                 pose = nerf_matrix_to_ngp(pose, scale=self.scale, offset=self.offset)
 
                 image = cv2.imread(f_path, cv2.IMREAD_UNCHANGED) # [H, W, 3] o [H, W, 4]
@@ -258,7 +262,7 @@ class NeRFDataset:
                 # 이미지와 pose 추가.
                 self.poses.append(pose)
                 self.images.append(image)
-            
+        
         self.poses = torch.from_numpy(np.stack(self.poses, axis=0)) # [N, 4, 4]
         if self.images is not None:
             self.images = torch.from_numpy(np.stack(self.images, axis=0)) # [N, H, W, C]

@@ -416,6 +416,7 @@ class Trainer(object):
             self.log_ptr = open(self.log_path, "a+")
             self.ckpt_path = os.path.join(self.workspace, 'checkpoints')
             self.best_path = f"{self.ckpt_path}/{self.name}.pth"
+    
             if not opt.test:
                 os.makedirs(self.ckpt_path, exist_ok=True)
             

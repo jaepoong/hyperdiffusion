@@ -4,6 +4,7 @@ import argparse
 from nerf.utils import *
 from nerf.network import NeRFNetwork
 from encoding import *
+print('ji')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--path', default='./data/photoshapes/shape09096_rank00',type=str)
@@ -58,26 +59,27 @@ opt = parser.parse_args(args=[])
 
 if opt.O:
     opt.fp16 = True
-    opt.cuda_ray = True
+    opt.cuda_ray = False # if use this, model make density bitfield. So making field would hard.
     opt.preload = True
 
 if opt.patch_size > 1:
     opt.error_map = False # do not use error_map if use patch-based training
     # assert opt.patch_size > 16, "patch_size should > 16 to run LPIPS loss."
     assert opt.num_rays % (opt.patch_size ** 2) == 0, "patch_size ** 2 should be dividable by num_rays."
-    
+
+opt.cuda_ray=False 
 
 import os
 from nerf.network_tcnn import NeRFNetwork
 
-data_dir = "./data/photoshapes/"
-paths=sorted(os.listdir(data_dir))
-
+data_dir = "./data/omni3d/OpenXD-OmniObject3D-New/raw/blender_renders"
+paths=sorted(os.listdir(data_dir))[2:28]
 seed_everything(opt.seed)
 
 i=0
-for path in paths[1:]:
-    data_path=os.path.join(data_dir,path)
+for path in paths:
+    print(path)
+    data_path=os.path.join(data_dir,path,'render')
     work_space=os.path.join('./result',path)
     opt.path=data_path
     
@@ -98,13 +100,12 @@ for path in paths[1:]:
     criterion = torch.nn.MSELoss(reduction='none')
     
     # device define
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # train_loader define
-    try:
-        train_loader = NeRFDataset(opt, device=device, type='trainval').dataloader()
-    except:
-        continue
+        #train_loader = NeRFDataset(opt, device=device, type='trainval').dataloader()
+    train_loader = NeRFDataset(opt, device=device, type='train').dataloader() # for omni3d
+
     
     # optimizer define
     optimizer = lambda model: torch.optim.Adam(model.get_params(opt.lr), betas=(0.9, 0.99), eps=1e-15)

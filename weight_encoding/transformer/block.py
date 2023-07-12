@@ -101,16 +101,18 @@ class PositionwiseFeedForward(nn.Module):
 
     def __init__(self, d_model, hidden, out, drop_prob=0.1):
         super(PositionwiseFeedForward,self).__init__()
+
         self.linear1 = nn.Linear(d_model,hidden)
         self.linear2 = nn.Linear(hidden, out) # changed to output dimmension to fluent
-        self.relu = nn.ReLU()
+        self.act = nn.GELU()
         self.dropout = nn.Dropout(p=drop_prob)
 
     def forward(self, x):
         x=self.linear1(x)
-        x=self.relu(x)  # skip-connection
+        x=self.act(x)  # skip-connection
         x=self.dropout(x)
         x=self.linear2(x)
+
         return x
 
 
@@ -120,7 +122,7 @@ class EncoderLayer(nn.Module):
         super(EncoderLayer,self).__init__()
         
         self.out = out if out else d_model # output size를 define하면 그대로 아니면 원래 d_model사이즈 그대로 받음. for down or upsampling
-        
+        self.d_model=d_model
         self.attention = MultiHeadAttention(d_model=d_model, n_head=n_head)
         
         self.norm1 = LayerNorm(d_model)
@@ -130,9 +132,11 @@ class EncoderLayer(nn.Module):
         
         self.norm2 = LayerNorm(d_model=self.out)
         self.dropout2=nn.Dropout(drop_prob)
+        
+        
     
     
-    def forward(self, x, src_mask):
+    def forward(self, x, src_mask=None):
         _x = x
         # multi head attention
         x = self.attention(q=x, k=x, v=x, mask=src_mask)
@@ -140,11 +144,14 @@ class EncoderLayer(nn.Module):
         x = self.norm1(x+_x)
         
         # position wise feedforward
-        
+        if self.out==self.d_model:
+            _x=x
         x = self.ffn(x)
         x = self.dropout2(x)
-        x = self.norm2(x)
-        
+        if self.out==self.d_model:
+            x = self.norm2(x+_x)
+        else:
+            x = self.norm2(x)
         return x
         
 class DecoderLayer(nn.Module):
@@ -163,7 +170,7 @@ class DecoderLayer(nn.Module):
         self.dropout2=nn.Dropout(p=drop_prob)
         
         self.ffn=PositionwiseFeedForward(d_model=d_model,hidden=ffn_hidden,drop_prob=drop_prob,out=self.out)
-        self.norm3=LayerNorm(d_model=out)
+        self.norm3=LayerNorm(d_model=self.out)
         self.dropout3=nn.Dropout(p=drop_prob)
     
     def forward(self,dec,enc):
@@ -194,10 +201,10 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len, device):
         super(PositionalEncoding,self).__init__()
         self.device=device
-        self.encoding = torch.zeros(max_len, d_model, device = device)
+        self.encoding = torch.zeros(max_len, d_model).to(device)
         self.encoding.requires_grad = False
         
-        pos = torch.arange(0,max_len,device=device)
+        pos = torch.arange(0,max_len).to(device)
         pos = pos.float().unsqueeze(dim=1)
         
         _2i = torch.arange(0, d_model, step=2, device=device).float()
@@ -213,7 +220,7 @@ class PositionalEncoding(nn.Module):
 
 class Weight_Split(nn.Module):
     def __init__(self, input_parameter_sizes, output_parameter_sizes, #input_parameter_names,
-                 split_policy='chunk',chunk_size=512
+                 split_policy='chunk',chunk_size=1024
                  ):
         '''
             input_parameter_sizes : 파라미터의 크기를 입력할것
@@ -230,7 +237,6 @@ class Weight_Split(nn.Module):
         if split_policy=="chunk":
             total_n_params=sum(parameter_sizes)
             num=total_n_params//chunk_size
-            print(num)
             splits=[chunk_size]*num
             remainder=total_n_params%chunk_size
             if remainder>0:

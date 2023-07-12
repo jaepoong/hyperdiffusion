@@ -7,7 +7,7 @@ tmp*
 data/
 trial*/
 .vs/
-
+result/
 #**dnerf*
 #dnerf/
 dnerf/network_rf.py
@@ -17,3 +17,6 @@ dnerf/network_basis_perpoint.py
 neus/
 
 workspace/
+
+weight_encoding/weight_transformer/result/
+weight_encoding/weight_transformer/work_space/
